@@ -24,7 +24,7 @@
     while (node && node.tagName !== 'HTML') {
       id = node.getAttribute('data-' + slug + '-id');
       if (id != null) {
-        if (model.get && model.id_attr) {
+        if (model && model.get && model.id_attr) {
           return model.get(id);
         } else {
           return id;

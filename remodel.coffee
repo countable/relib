@@ -29,6 +29,7 @@ namespace.menu_options_sync = (items)->
   catch e
     recent = {}
   
+  # Recent items should be preferred.
   @menu_options = @menu_options.sort (a, b)->
     score = 0
     if a.text > b.text
@@ -64,8 +65,6 @@ namespace.load = (models, cb)->
     , ->
       cb()
 
-ajax_reporter = (result)->
-  if result.success is false then console.error result.message or "unspecified error"
 
 resolve_model = (model_path)->
   if typeof model_path is 'string'
@@ -76,10 +75,10 @@ resolve_model = (model_path)->
     throw 'No model "' + model_path + '" could be resolved.'
   model
 
+
 class namespace.Model extends retool.Class
 
   # reverse foreign key lookup
-
   rlookup: (model, slug)->
     model = resolve_model model
     query = {}
@@ -106,7 +105,7 @@ class namespace.Model extends retool.Class
     @constructor.save @
 
   del: ->
-    @constructor.del @_id
+    @constructor.del @get_id()
 
   @desc_attr: 'name'
 
@@ -135,7 +134,7 @@ class namespace.Model extends retool.Class
     if id
       orig = @get id
     
-    # If the object exists in the DB already based on unique id...
+    # If the object exists already based on unique id...
     if orig
       if overwrite # If the overwrite flag is set, remove and re-add the object.
         @items = @filter (o)->
@@ -148,61 +147,36 @@ class namespace.Model extends retool.Class
       @items.push obj
     obj
 
-
   @save: (obj, overwrite=false)->
     # Whether or not the object is in the collection already
     obj = @add obj, overwrite
-    $.post "/data/"+@slug+"/"+obj.get_id(),
-        data: JSON.stringify obj
-      , ajax_reporter
     obj
-
 
   # Model.del - delete an object m
   @del: (id)->
     if typeof id is 'object' # If we're given a full object, get just the _id
-      id = id._id
-
-    $.get "/data/"+@slug+"/"+id+"/del", ajax_reporter
+      id = @hydrate(id).get_id()
     @items = @filter (o)->
-      o._id isnt id
-
+      o.get_id() isnt id
+    id
 
   @get: (id)->
     query = {}
     query[@id_attr or "_id"] = id
     @findWhere query
 
-
-  @all: ->
-    @items
-
-
   @hydrate: (item)-> # TODO - make this work in old browser. The issue is "new" doesn't update in place.
     item.__proto__ = @prototype
   
   dehydrate: -> # TODO - make this work in old browser. The issue is "new" doesn't update in place.
     delete item.__proto__
+  
+  @load: (items)->
+    @items = items
+    for item in @items
+      @hydrate item
 
-  # Load data from the server.
-  @load: (done)->
-    
-    me = @
-
-    complete = (results)->
-      ajax_reporter results # error reporting
-      me.items = results
-      for item in me.items
-        me.hydrate item
-      done me.items
-
-    if remodel.warmup[@slug]
-      complete remodel.warmup[@slug]
-    else
-      $.get "/data/"+@slug, complete
-
-
-
+# Extend with underscore methods.
 if typeof _ isnt 'undefined'
   
   underscore_array_methods = [
@@ -221,5 +195,50 @@ if typeof _ isnt 'undefined'
       namespace.Model[method] = ->
         _[method].apply _, [@items].concat _.toArray arguments
     ) method
+
+
+ajax_reporter = (result)->
+  if result.success is false then console.error result.message or "unspecified error"
+
+
+class namespace.AjaxModel extends namespace.Model
+
+  @save: (obj, overwrite=false)->
+    # Whether or not the object is in the collection already
+    obj = super
+    $.post "/data/"+@slug+"/"+obj.get_id(),
+        data: JSON.stringify obj
+      , ajax_reporter
+    obj
+    
+  # Model.del - delete an object m
+  @del: (id)->
+    id = super
+    $.get "/data/"+@slug+"/"+id+"/del", ajax_reporter
+
+  # Load data from the server.
+  @load: (done)->
+    
+    if remodel.warmup[@slug]
+      super remodel.warmup[@slug]
+    else
+      $.get "/data/"+@slug, (results)=>
+        ajax_reporter results # error reporting
+        super results
+
+
+class namespace.LocalStorageModel extends namespace.Model
+
+  @save: (obj, overwrite=false)->
+    super
+    localStorage[@slug] = JSON.stringify @items
+
+  @del: (id)->
+    super
+    localStorage[@slug] = JSON.stringify @items
+
+  @load: ->
+    items = JSON.parse localStorage[@slug] or '[]'
+    super @items
 
 

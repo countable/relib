@@ -24,7 +24,7 @@ $.fn.item = (model)->
   while node and node.tagName isnt 'HTML'
     id = node.getAttribute('data-'+slug+'-id')
     if id?
-      if model.get and model.id_attr # If a real model was passed, find instance.
+      if model and model.get and model.id_attr # If a real model was passed, find instance.
         return model.get id
       else
         return id
