@@ -57,10 +57,12 @@
         $root = $root.parents(root);
       }
     } else {
+      console.log(el);
       while (el) {
         _ref = get_classes(el);
         for (_i = 0, _len = _ref.length; _i < _len; _i++) {
           c = _ref[_i];
+          console.log(c);
           if (view_registry[c]) {
             console.log('got one');
             root = c;
@@ -274,6 +276,7 @@
   };
 
   namespace.init = function(node, data) {
+    console.log(node);
     return (get_closest_view(node)).syncRoot(data);
   };
 

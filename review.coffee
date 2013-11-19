@@ -48,9 +48,10 @@ get_closest_view = (el, root)->
       $root = $root.parents(root)
   
   else # If no root was provided, use the closest one.
-
+    console.log el
     while el
       for c in get_classes el
+        console.log c
         if view_registry[c]
           console.log 'got one'
           root = c
@@ -281,4 +282,6 @@ base_view =
     @depth -= 1
 
 namespace.init = (node, data)->
+  console.log node
   (get_closest_view node).syncRoot data
+
