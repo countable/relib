@@ -6,23 +6,8 @@ else
   namespace = module.exports
 
 
-debounce = (func, threshold, execAsap) ->
-  timeout = undefined
-  debounced = ->
-    delayed = ->
-      func.apply obj, args  unless execAsap
-      timeout = null
-    obj = this
-    args = arguments
-    if timeout
-      clearTimeout timeout
-    else func.apply obj, args  if execAsap
-    timeout = setTimeout(delayed, threshold or 100)
-
-
 $doc = $(document)
 window.view_registry = {}
-
 
 get_classes = (node)->
   if node.className
@@ -31,6 +16,8 @@ get_classes = (node)->
     classes = []
   if node.name
     classes.push node.name
+  if node.id
+    classes.push node.id
   classes
 
 
@@ -39,7 +26,6 @@ get_classes = (node)->
 # @el is the contextual element the event was delegated to (bound to "this" in vanilla JS)
 # @target is the event target (e.target)
 get_closest_view = (el, root)->
-
   # Get the specific root element if a root is specified.
   if root
 
@@ -48,13 +34,10 @@ get_closest_view = (el, root)->
       $root = $root.parents(root)
   
   else # If no root was provided, use the closest one.
-    console.log el
     while el
       for c in get_classes el
-        console.log c
-        if view_registry[c]
-          console.log 'got one'
-          root = c
+        if view_registry['.'+c]
+          root = '.'+c
           $root = $(el)
           break
       el = el.parentNode  
@@ -125,10 +108,9 @@ timeout = undefined # one global sync timeout for debouncing.
 
 base_view =
   
-  parent: -> # get the parent view of this view.
+  parent: -> # get the parent view of this view. Views must be initialized
     node = @$.parent().get(0)
     while node
-      console.log view
       if $(node).data 'view' # View should be initialized since this one is.
         return $(node).data 'view'
       node = node.parentNode
@@ -146,7 +128,6 @@ base_view =
 
   # Render a value to a node based on the node's type.
   syncTerminal: (node, value)->
-
     if node.tagName is 'INPUT'
       if node.type is 'checkbox'
         node.checked = not not value
@@ -161,7 +142,7 @@ base_view =
   # but we want to avoid flickering caused by re-creating big chunks of DOM.
   # TODO: this code is complicated enough that it needs some tests!
   syncArray: (parent_node, match)->
-    
+    console.log 'ARRAY'
     tpl_node = parent_node.lastElementChild
     tpl_node.style.display = 'none' # hide the original
     
@@ -219,17 +200,22 @@ base_view =
       timeout = setTimeout =>
           console.log 'syncing...'
           timeout = null
-          @syncData window.data
+          @resync()
         , 25
   
-  syncRoot: (node, data) ->
-    @syncObject node, data, true
-    @afterSync?(node, data)
+  resync: ->
+    @syncRoot @$.data 'item'
+
+  syncRoot: (data) ->
+    @$.data 'item', data
+    console.log 'SYNCING', data
+    @syncObject @$.get(0), data, true
+    @afterSync? data
 
     
   syncObject: (node, data, skip=false) ->
-    
-    #@print node, data
+
+    @print node, data
 
     # Keep track of recursion depth.
     @depth += 1
@@ -243,22 +229,23 @@ base_view =
       for c in classes
         # Transition to a new view class if one is appropriate.
         if view_registry['.'+c]
-          child_view = get_view_for node, '.'+c
-          child_view.syncRoot node, data
+          child_view = get_closest_view node, '.'+c
+          child_view.syncRoot data
           @depth -= 1
           return # Switched to child view, so stop traversing with this one.
 
         if data[c] isnt undefined
           match = data[c]
+          break
 
     #if data._id
     #  node.setAttribute? 'data-item-id', data._id
     match_type = typeof match
-
     if match_type isnt 'undefined'
       
       # Strings should be rendered to the node, and exit recursion.
       if match_type is 'string' or match_type is 'boolean'
+
         @syncTerminal node, match
         @depth -= 1
         return # Strings are "leaves"
@@ -270,6 +257,7 @@ base_view =
       
       else if match_type is 'object'
         data = match # Walk into the object
+        $(node).data 'item', match
 
       else if match_type is 'function'
         data = match node # Evaluate the function
